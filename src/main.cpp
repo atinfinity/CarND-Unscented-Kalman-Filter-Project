@@ -26,8 +26,7 @@ std::string hasData(std::string s) {
   return "";
 }
 
-int main()
-{
+int main(int argc, const char* argv[]) {
   uWS::Hub h;
 
   // Create a Kalman Filter instance
@@ -173,4 +172,6 @@ int main()
     return -1;
   }
   h.run();
+
+  return 0;
 }
