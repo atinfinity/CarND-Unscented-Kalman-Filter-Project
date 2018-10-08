@@ -44,14 +44,33 @@ UKF::UKF() {
   // Radar measurement noise standard deviation radius change in m/s
   std_radrd_ = 0.3;
   //DO NOT MODIFY measurement noise values above these are provided by the sensor manufacturer.
-  
-  /**
-   TODO:
 
-   Complete the initialization. See ukf.h for other member properties.
+  // set to true in first call of ProcessMeasurement
+  is_initialized_ = false;
 
-   Hint: one or more values initialized above might be wildly off...
-   */
+  // time when the state is true, in us
+  time_us_ = 0.0;
+
+  // set state dimension
+  n_x_ = 5;
+
+  // set augmented dimension
+  n_aug_ = n_x_ + 2;
+
+  // define spreading parameter
+  lambda_ = 3 - n_aug_;
+
+  // set weights of sigma points
+  weights_ = VectorXd((2*n_aug_) + 1);
+
+  // create vector for predicted state
+  x_ = VectorXd(n_x_);
+
+  // create covariance matrix for prediction
+  P_ = MatrixXd(n_x_, n_x_);
+
+  // create predicted sigma points matrix
+  Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
 }
 
 UKF::~UKF() {}
