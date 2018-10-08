@@ -116,7 +116,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
      is_initialized_ = true;
      return;
   }
-  std::cout << "UKF::ProcessMeasurement" << std::endl;
 
   if ((meas_package.sensor_type_ == MeasurementPackage::RADAR) && (use_radar_ == true)) {
     double delta_t = (meas_package.timestamp_ - previous_timestamp) / 1000000.0;
@@ -138,7 +137,6 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
  * measurement and this one.
  */
 void UKF::Prediction(double delta_t) {
-  std::cout << "UKF::Prediction" << std::endl;
   MatrixXd Q_ = MatrixXd(2, 2);
   Q_ << std_a_ * std_a_, 0,
         0, std_yawdd_* std_yawdd_;
@@ -211,6 +209,8 @@ void UKF::Prediction(double delta_t) {
   P_.fill(0.0);
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {
     VectorXd x_temp = Xsig_pred_.col(i) - x_;
+
+    // angle normalization
     while (x_temp(3) > M_PI) {
       x_temp(3) -= 2.0 * M_PI;
     }
@@ -226,7 +226,6 @@ void UKF::Prediction(double delta_t) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateLidar(MeasurementPackage meas_package) {
-  std::cout << "UKF::UpdateLidar" << std::endl;
   VectorXd z_ = VectorXd(2);
   z_ << meas_package.raw_measurements_[0], meas_package.raw_measurements_[1];
   MatrixXd H_;
@@ -251,12 +250,104 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
  * @param {MeasurementPackage} meas_package
  */
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
-  /**
-   TODO:
+  constexpr int n_z_ = 3;
+  VectorXd z_ = VectorXd(n_z_);
+  z_ = meas_package.raw_measurements_;
+  MatrixXd Zsig_ = MatrixXd(n_z_, n_aug_ * 2 + 1);
 
-   Complete this function! Use radar data to update the belief about the object's
-   position. Modify the state vector, x_, and covariance, P_.
+  for (int i = 0; i < 2 * n_aug_ + 1; i++) {
+    // extract values for better readibility
+    double p_x = Xsig_pred_(0, i);
+    double p_y = Xsig_pred_(1, i);
+    double v   = Xsig_pred_(2, i);
+    double yaw = Xsig_pred_(3, i);
+    double v1  = cos(yaw) * v;
+    double v2  = sin(yaw) * v;
 
-   You'll also need to calculate the radar NIS.
-   */
+    // measurement model
+    Zsig_(0,i) = sqrt(p_x*p_x + p_y*p_y);                      // r
+    Zsig_(1,i) = atan2(p_y,p_x);                               // phi
+    Zsig_(2,i) = (p_x*v1 + p_y*v2 ) / sqrt(p_x*p_x + p_y*p_y); // r_dot
+  }
+
+  //mean predicted measurement
+  VectorXd z_pred_ = VectorXd(n_z_);
+  z_pred_.fill(0.0);
+  for (int i = 0; i < 2*n_aug_ + 1; i++) {
+      z_pred_ = z_pred_ + weights_(i) * Zsig_.col(i);
+  }
+
+  //measurement covariance matrix S
+  MatrixXd S_ = MatrixXd(n_z_,n_z_);
+  S_.fill(0.0);
+  for (int i = 0; i < 2 * n_aug_ + 1; i++) {
+    // residual
+    VectorXd z_diff_ = Zsig_.col(i) - z_pred_;
+
+    // angle normalization
+    while (z_diff_(1) > M_PI) {
+      z_diff_(1) -= 2. * M_PI;
+    }
+    while (z_diff_(1) < -M_PI) {
+      z_diff_(1) += 2. * M_PI;
+    }
+
+    S_ = S_ + weights_(i) * z_diff_ * z_diff_.transpose();
+  }
+
+  // add measurement noise covariance matrix
+  MatrixXd R_ = MatrixXd(n_z_,n_z_);
+  R_ <<    std_radr_ * std_radr_, 0, 0,
+          0, std_radphi_ * std_radphi_, 0,
+          0, 0, std_radrd_*std_radrd_;
+  S_ = S_ + R_;
+
+  MatrixXd Tc_ = MatrixXd(n_x_, n_z_);
+  Tc_.fill(0.0);
+
+  //calculate cross correlation matrix
+  for (int i = 0; i < 2 * n_aug_ + 1; i++) {
+
+    // residual
+    VectorXd z_diff_ = Zsig_.col(i) - z_pred_;
+
+    // angle normalization
+    while (z_diff_(1) > M_PI) {
+      z_diff_(1) -= 2. * M_PI;
+    }
+    while (z_diff_(1) < -M_PI) {
+      z_diff_(1) += 2. * M_PI;
+    }
+
+    // state difference
+    VectorXd x_diff_ = Xsig_pred_.col(i) - x_;
+
+    // angle normalization
+    while (x_diff_(3) > M_PI) {
+      x_diff_(3) -= 2. * M_PI;
+    }
+    while (x_diff_(3) < -M_PI) {
+      x_diff_(3) += 2. * M_PI;
+    }
+
+    Tc_ = Tc_ + weights_(i) * x_diff_ * z_diff_.transpose();
+  }
+
+  // Kalman gain K;
+  MatrixXd K_ = Tc_ * S_.inverse();
+
+  // residual
+  VectorXd z_diff_ = z_ - z_pred_;
+
+  // angle normalization
+  while (z_diff_(1) > M_PI) {
+    z_diff_(1) -= 2. * M_PI;
+  }
+  while (z_diff_(1) < -M_PI) {
+    z_diff_(1) += 2. * M_PI;
+  }
+
+  // update state mean and covariance matrix
+  x_ = x_ + K_ * z_diff_;
+  P_ = P_ - K_ * S_ * K_.transpose();
 }
