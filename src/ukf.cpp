@@ -83,12 +83,53 @@ UKF::~UKF() {}
  * either radar or laser.
  */
 void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
-  /**
-   TODO:
+   if (!is_initialized_) {
+     double px = 0;
+     double py = 0;
+     std::cout << "Begin Initialization" << std::endl;
 
-   Complete this function! Make sure you switch between lidar and radar
-   measurements.
-   */
+     if (meas_package.sensor_type_ == MeasurementPackage::RADAR) {
+       double rho = meas_package.raw_measurements_[0];
+       double phi = meas_package.raw_measurements_[1];
+       px = rho * cos(phi);
+       py = rho * sin(phi);
+
+       // Check for zeros, if either are zero, initialize with high uncertainty
+       if (fabs(px) < 0.001) {
+         px = 1;
+         P_(0,0) = 1000;
+       }
+       if (fabs(py) < 0.001) {
+         py = 1;
+         P_(1,1) = 1000;
+       }
+       std::cout << "First measurement is RADAR" << std::endl;
+     }
+     else if (meas_package.sensor_type_ == MeasurementPackage::LASER) {
+       std::cout << "First measurement is LASER" << std::endl;
+       px = meas_package.raw_measurements_[0];
+       py = meas_package.raw_measurements_[1];
+     }
+
+     x_ << px, py, 0., 0., 0.;
+     previous_timestamp = meas_package.timestamp_;
+     is_initialized_ = true;
+     return;
+  }
+  std::cout << "UKF::ProcessMeasurement" << std::endl;
+
+  if ((meas_package.sensor_type_ == MeasurementPackage::RADAR) && (use_radar_ == true)) {
+    double delta_t = (meas_package.timestamp_ - previous_timestamp) / 1000000.0;
+    previous_timestamp = meas_package.timestamp_;
+    Prediction(delta_t);
+    UpdateRadar(meas_package);
+  }
+  else if ((meas_package.sensor_type_ == MeasurementPackage::LASER) && (use_laser_ == true)) {
+    double delta_t = (meas_package.timestamp_ - previous_timestamp) / 1000000.0;
+    previous_timestamp = meas_package.timestamp_;
+    Prediction(delta_t);
+    UpdateLidar(meas_package);
+  }
 }
 
 /**
