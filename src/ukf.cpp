@@ -62,14 +62,17 @@ UKF::UKF() {
 
   // set weights of sigma points
   weights_ = VectorXd((2*n_aug_) + 1);
+  weights_.segment(1, (2*n_aug_)).fill(0.5 / (n_aug_ + lambda_));
+  weights_(0) = lambda_ / (lambda_ + n_aug_);
 
   // create vector for predicted state
   x_ = VectorXd(n_x_);
 
   // create covariance matrix for prediction
-  P_ = MatrixXd(n_x_, n_x_);
+  P_ = MatrixXd::Identity(n_x_, n_x_);
 
   // create predicted sigma points matrix
+  Xsig_aug_  = MatrixXd(n_aug_, 2 * n_aug_ + 1);
   Xsig_pred_ = MatrixXd(n_x_, 2 * n_aug_ + 1);
 }
 

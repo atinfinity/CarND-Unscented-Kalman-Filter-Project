@@ -29,6 +29,7 @@ public:
   MatrixXd P_;
 
   ///* predicted sigma points matrix
+  MatrixXd Xsig_aug_;
   MatrixXd Xsig_pred_;
 
   ///* time when the state is true, in us
@@ -66,7 +67,6 @@ public:
 
   ///* Sigma point spreading parameter
   double lambda_;
-
 
   /**
    * Constructor
